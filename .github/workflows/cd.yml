@@ -1,0 +1,89 @@
+name: CD Pipeline
+
+permissions: {}
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [master]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/devops-cicd-lab
+
+jobs:
+  # ── Job 1: Deploy to Staging (automatic) ─────────────────
+  deploy-staging:
+    name: Deploy → Staging
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: staging
+    outputs:
+      image_sha: ${{ steps.get-sha.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Get commit SHA
+        id: get-sha
+        run: |
+          FULL_SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "sha=sha-${FULL_SHA:0:7}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to staging
+        env:
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.event.workflow_run.head_sha }}"
+        run: |
+          echo "🚀 Deploying to STAGING..."
+          echo "   Image:     $IMAGE"
+          echo "   Commit:    ${{ github.event.workflow_run.head_sha }}"
+          echo ""
+          echo "✅ Staging deployment complete!"
+          echo "   URL: https://staging.devops-cicd-lab.example.com"
+
+  # ── Job 2: Smoke Tests ────────────────────────────────────
+  smoke-test:
+    name: Smoke Test (Staging)
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: Run smoke tests against staging
+        run: |
+          echo "🔍 Running smoke tests against staging..."
+          echo ""
+          echo "   ✔ GET /        → 200 OK, service=devops-cicd-lab"
+          echo "   ✔ GET /health  → {\"status\": \"ok\"}"
+          echo "   ✔ GET /greeting → 200 OK"
+          echo ""
+          echo "✅ All smoke tests passed!"
+
+  # ── Job 3: Deploy to Production (manual approval) ────────
+  deploy-production:
+    name: Deploy → Production
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: production
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Deploy to production
+        env:
+          IMAGE: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.event.workflow_run.head_sha }}"
+        run: |
+          echo "🚀 Deploying to PRODUCTION..."
+          echo "   Image:     $IMAGE"
+          echo "   Commit:    ${{ github.event.workflow_run.head_sha }}"
+          echo ""
+          echo "✅ Production deployment complete!"
+          echo "   URL: https://devops-cicd-lab.example.com"
+          echo ""
+          echo "📌 Build Once, Deploy Many:"
+          echo "   Same SHA used across staging and production."

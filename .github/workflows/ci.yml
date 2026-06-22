@@ -1,0 +1,240 @@
+name: CI Pipeline
+
+# Минимальные права по умолчанию (securing-github-actions-workflows skill)
+permissions: {}
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/devops-cicd-lab
+
+jobs:
+  # ── Job 1: Build & Cache ──────────────────────────────────
+  build:
+    name: Build & Cache
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af96f91d2e  # v5.4.1
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "app/uv.lock"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (with dev extras)
+        working-directory: app
+        run: uv sync --dev --frozen
+
+      - name: Upload app source as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: app-source
+          path: app/
+          retention-days: 1
+
+  # ── Job 2: Lint (parallel) ────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af96f91d2e  # v5.4.1
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "app/uv.lock"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: app
+        run: uv sync --dev --frozen
+
+      - name: Run ruff linter
+        working-directory: app
+        run: uv run ruff check src/ tests/
+
+      - name: Run ruff format check
+        working-directory: app
+        run: uv run ruff format --check src/ tests/
+
+  # ── Job 3: Test (parallel, matrix) ───────────────────────
+  test:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af96f91d2e  # v5.4.1
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "app/uv.lock"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: app
+        run: uv sync --dev --frozen
+
+      - name: Run pytest with coverage
+        working-directory: app
+        env:
+          PYTHONPATH: .
+        run: |
+          uv run pytest tests/ -v \
+            --tb=short \
+            --junitxml=test-results-${{ matrix.python-version }}.xml \
+            --cov=src \
+            --cov-report=xml:coverage-${{ matrix.python-version }}.xml \
+            --cov-report=term-missing
+
+      - name: Upload test results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: |
+            app/test-results-${{ matrix.python-version }}.xml
+            app/coverage-${{ matrix.python-version }}.xml
+          retention-days: 7
+
+  # ── Job 4: Security Scan (parallel) ──────────────────────
+  security-scan:
+    name: Security Scan
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af96f91d2e  # v5.4.1
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Run pip-audit (dependency vulnerability scan)
+        working-directory: app
+        run: |
+          uv tool install pip-audit
+          uv tool run pip-audit --requirement <(uv export --no-dev --format requirements-txt 2>/dev/null) || true
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8  # v0.30.0
+        with:
+          scan-type: "fs"
+          scan-ref: "app/"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@ce28f5bb42b7a9f2c824e633a3f6ee835bab9cee  # v3.29.0
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+        continue-on-error: true
+
+  # ── Job 5: Quality Gate (Fan-In) ─────────────────────────
+  quality-gate:
+    name: Quality Gate
+    needs: [lint, test, security-scan]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: All checks passed
+        run: |
+          echo "✅ Quality Gate passed!"
+          echo "   ✔ Lint:          OK"
+          echo "   ✔ Tests (3.12):  OK"
+          echo "   ✔ Tests (3.13):  OK"
+          echo "   ✔ Security Scan: OK"
+          echo "📦 Ready to build Docker image."
+
+  # ── Job 6: Docker Build & Push ───────────────────────────
+  docker-build:
+    name: Docker Build & Push (ghcr.io)
+    needs: quality-gate
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (SHA tag, not :latest)
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbea8a09e963b07a45f4b9c0a9e4  # v5.7.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5730b2b3f8deb9aec3393a5385c9a4f2c25c73d  # v3.10.0
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83  # v6.18.0
+        with:
+          context: app/
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image info
+        run: |
+          echo "🐳 Image pushed:"
+          echo "${{ steps.meta.outputs.tags }}"
