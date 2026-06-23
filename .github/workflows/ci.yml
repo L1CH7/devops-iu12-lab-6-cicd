@@ -11,6 +11,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/devops-cicd-lab
+  VIRTUAL_ENV: ${{ github.workspace }}/app/.venv
 
 jobs:
   # ── Job 1: Build & Cache ──────────────────────────────────
@@ -29,12 +30,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
           working-directory: "app"
-          activate-environment: true
-          venv-path: "app/.venv"
 
       - name: Install all dependencies
         working-directory: app
-        run: uv sync --dev
+        run: uv sync --all-extras
 
       - name: Upload app source as artifact
         uses: actions/upload-artifact@v4
@@ -60,12 +59,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
           working-directory: "app"
-          activate-environment: true
-          venv-path: "app/.venv"
 
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev
+        run: uv sync --all-extras
 
       - name: Run ruff linter
         working-directory: app
@@ -96,12 +93,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
           working-directory: "app"
-          activate-environment: true
-          venv-path: "app/.venv"
 
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev
+        run: uv sync --all-extras
 
       - name: Run pytest with coverage
         working-directory: app
@@ -141,8 +136,6 @@ jobs:
         with:
           python-version: "3.12"
           working-directory: "app"
-          activate-environment: true
-          venv-path: "app/.venv"
 
       - name: Export prod deps and run pip-audit
         working-directory: app
