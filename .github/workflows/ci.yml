@@ -22,20 +22,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv + Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
+          python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
+      - name: Install all dependencies
         working-directory: app
-        run: uv sync --dev --locked
+        run: uv sync --dev
 
       - name: Upload app source as artifact
         uses: actions/upload-artifact@v4
@@ -54,20 +50,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv + Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
+          python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev --locked
+        run: uv sync --dev
 
       - name: Run ruff linter
         working-directory: app
@@ -91,20 +83,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv + Python ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v5
         with:
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev --locked
+        run: uv sync --dev
 
       - name: Run pytest with coverage
         working-directory: app
@@ -139,20 +127,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv + Python 3.12
         uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Export deps and run pip-audit
+      - name: Export prod deps and run pip-audit
         working-directory: app
         run: |
-          uv export --no-dev --format requirements-txt > /tmp/prod-requirements.txt
+          uv export --no-dev --format requirements-txt > /tmp/prod-req.txt
           uv tool install pip-audit
-          uv tool run pip-audit -r /tmp/prod-requirements.txt || true
+          uv tool run pip-audit -r /tmp/prod-req.txt || true
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
@@ -165,7 +150,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
