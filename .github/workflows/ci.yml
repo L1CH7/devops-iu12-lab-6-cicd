@@ -30,6 +30,7 @@ jobs:
           cache-dependency-glob: "app/uv.lock"
           working-directory: "app"
           activate-environment: true
+          venv-path: "app/.venv"
 
       - name: Install all dependencies
         working-directory: app
@@ -60,6 +61,7 @@ jobs:
           cache-dependency-glob: "app/uv.lock"
           working-directory: "app"
           activate-environment: true
+          venv-path: "app/.venv"
 
       - name: Install dependencies
         working-directory: app
@@ -95,6 +97,7 @@ jobs:
           cache-dependency-glob: "app/uv.lock"
           working-directory: "app"
           activate-environment: true
+          venv-path: "app/.venv"
 
       - name: Install dependencies
         working-directory: app
@@ -139,6 +142,7 @@ jobs:
           python-version: "3.12"
           working-directory: "app"
           activate-environment: true
+          venv-path: "app/.venv"
 
       - name: Export prod deps and run pip-audit
         working-directory: app
