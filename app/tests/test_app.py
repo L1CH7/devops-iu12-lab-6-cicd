@@ -3,6 +3,7 @@
 import os
 
 import pytest
+
 from src.app import app as flask_app
 
 
@@ -94,3 +95,12 @@ class TestGreeting:
         """GET /greeting should always return HTTP 200."""
         response = client.get("/greeting")
         assert response.status_code == 200
+
+    def test_greeting_with_name_param(self, client):
+        """With FEATURE_NEW_GREETING=true and ?name=Alice returns personalised greeting."""
+        os.environ["FEATURE_NEW_GREETING"] = "true"
+        try:
+            data = client.get("/greeting?name=Alice").get_json()
+            assert "Alice" in data["greeting"]
+        finally:
+            os.environ.pop("FEATURE_NEW_GREETING", None)
