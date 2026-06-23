@@ -28,6 +28,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
+          working-directory: "app"
 
       - name: Install all dependencies
         working-directory: app
@@ -56,6 +57,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
+          working-directory: "app"
 
       - name: Install dependencies
         working-directory: app
@@ -89,6 +91,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           cache-dependency-glob: "app/uv.lock"
+          working-directory: "app"
 
       - name: Install dependencies
         working-directory: app
@@ -131,6 +134,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+          working-directory: "app"
 
       - name: Export prod deps and run pip-audit
         working-directory: app
