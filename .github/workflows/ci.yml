@@ -35,7 +35,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev --frozen
+        run: uv sync --dev --locked
 
       - name: Upload app source as artifact
         uses: actions/upload-artifact@v4
@@ -67,7 +67,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev --frozen
+        run: uv sync --dev --locked
 
       - name: Run ruff linter
         working-directory: app
@@ -104,7 +104,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: app
-        run: uv sync --dev --frozen
+        run: uv sync --dev --locked
 
       - name: Run pytest with coverage
         working-directory: app
