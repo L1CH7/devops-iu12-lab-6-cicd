@@ -4,12 +4,14 @@
 
 **Лабораторная работа № 6: CI/CD Pipeline на GitHub Actions**  
 Курс: DevOps и инфраструктура | Уровень: Магистратура
+* **Студент:** L1CH7
+* **Репозиторий проекта:** https://github.com/L1CH7/devops-iu12-lab-6-cicd
 
 ---
 
 ## Описание
 
-Простое Flask-приложение с полноценным CI/CD пайплайном на GitHub Actions.
+Простое Flask-приложение с полноценным CI/CD пайплайном на GitHub Actions, переведённое на современный инструмент управления зависимостями `uv`.
 
 ### Эндпоинты приложения
 
@@ -27,38 +29,47 @@
 curl http://localhost:5000/greeting
 # → {"greeting": "Hello, World!"}
 
-# Новое приветствие
+# Новое приветствие с поддержкой query-параметра ?name
 FEATURE_NEW_GREETING=true python -m flask run
-curl http://localhost:5000/greeting
-# → {"greeting": "Hello from the new greeting feature! 🎉"}
+curl "http://localhost:5000/greeting?name=Alice"
+# → {"greeting": "Hello, Alice! 🎉 (new greeting feature)"}
 ```
 
 ---
 
-## Локальный запуск
+## Локальный запуск (с использованием uv)
 
 ```bash
 cd app
-pip install -r requirements.txt
-PYTHONPATH=. python src/app.py
+uv sync --all-extras
+PYTHONPATH=. uv run python src/app.py
 ```
 
 ### Запуск тестов
 ```bash
 cd app
-PYTHONPATH=. pytest tests/ -v
+PYTHONPATH=. uv run pytest tests/ -v
 ```
 
 ### Проверка линтером
 ```bash
 cd app
-ruff check src/ tests/
+uv run ruff check src/ tests/
 ```
 
-### Docker
+### Docker (запуск из реестра пакетов GHCR)
+
+**Ссылка на собранный пакет (Package):** https://github.com/L1CH7/devops-iu12-lab-6-cicd/pkgs/container/devops-cicd-lab
+
 ```bash
-docker build -t devops-cicd-lab ./app
-docker run -p 5000:5000 devops-cicd-lab
+# Стянуть собранный образ ветки master
+docker pull ghcr.io/l1ch7/devops-cicd-lab:master
+
+# Запуск стабильной версии (feature-флаг выключен)
+docker run -d -p 5000:5000 --name app_stable ghcr.io/l1ch7/devops-cicd-lab:master
+
+# Запуск с активированным фича-флагом
+docker run -d -p 5001:5000 -e FEATURE_NEW_GREETING=true --name app_feature ghcr.io/l1ch7/devops-cicd-lab:master
 ```
 
 ---
@@ -68,9 +79,9 @@ docker run -p 5000:5000 devops-cicd-lab
 ### CI Pipeline (Diamond Pattern)
 
 ```
-push/PR → main
+push/PR → master
          │
-      [build]  ← кэш pip зависимостей
+      [build]  ← кэш uv зависимостей
          │
     ┌────┼────┐
     ▼    ▼    ▼
@@ -80,7 +91,7 @@ push/PR → main
          ▼
   [quality-gate]  ← Fan-In (ждёт все три)
          │
-  [docker-build]  ← только на main, SHA тег, GHA cache
+  [docker-build]  ← только на master, SHA тег, GHA cache
 ```
 
 ### CD Pipeline (Promotion Pattern)
@@ -101,15 +112,15 @@ CI успешно →
 | Feature | Статус |
 |---------|--------|
 | Diamond Pipeline (Fan-Out + Fan-In) | ✅ |
-| Кэширование pip зависимостей | ✅ |
+| Кэширование uv зависимостей (`enable-cache: true`) | ✅ |
 | Сохранение test-results как артефакт | ✅ |
 | Trivy security scan + pip-audit | ✅ |
-| Docker image с SHA тегом (не :latest) | ✅ |
+| Docker image с SHA тегом | ✅ |
 | Docker layer cache (type=gha) | ✅ |
 | GitHub Environments (staging + production) | ✅ |
 | Manual approval для production | ✅ |
 | Smoke tests между staging и production | ✅ |
-| Branch protection на main | ✅ |
+| Branch protection на master | ✅ |
 | Feature flag через env переменную | ✅ |
 | Conventional Commits | ✅ |
 | CI Status Badge | ✅ |
@@ -117,18 +128,19 @@ CI успешно →
 
 ---
 
-## Trunk-Based Development
+## Trunk-Based Development & Branch Protection
 
-1. Всегда работаем от `main`
-2. Feature branches живут не более 1-2 дней
-3. Все изменения — через Pull Request
-4. Merge только после прохождения `quality-gate`
-5. Feature flags для переключения функциональности без мёртвого кода
+1. Всегда работаем от `master`. Прямой пуш в `master` заблокирован правилами Branch Protection.
+2. Вся разработка ведётся в короткоживущих feature-ветках.
+3. Слияние изменений — исключительно через Pull Request после прохождения `quality-gate` (*Required Status Check*).
+4. Feature flags для переключения функциональности без мёртвого кода.
+
+**Пример успешного Pull Request с проверками:** https://github.com/L1CH7/devops-iu12-lab-6-cicd/pull/1
 
 ---
 
-## Бонусы
+## Бонусы и продвинутый функционал
 
 - **CI Badge** в README ✅
 - **Dependabot** настроен (`.github/dependabot.yml`) ✅
-- **Reusable Workflow** — общая логика вынесена в переиспользуемый workflow ✅
+- **Matrix Build** — запуск тестов параллельно на Python 3.12 и 3.13 ✅
